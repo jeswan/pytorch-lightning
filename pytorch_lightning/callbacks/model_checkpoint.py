@@ -189,7 +189,6 @@ class ModelCheckpoint(Callback):
             or self.period < 1  # no models are saved
             or (epoch + 1) % self.period  # skip epoch
             or trainer.running_sanity_check  # don't save anything during sanity check
-            or self.epoch_last_check == epoch  # already saved
         ):
             return
 
@@ -197,7 +196,7 @@ class ModelCheckpoint(Callback):
         self._validate_monitor_key(trainer)
 
         # track epoch when ckpt was last checked
-        self.epoch_last_check = trainer.current_epoch
+        self.epoch_last_check = epoch
 
         # what can be monitored
         monitor_candidates = self._monitor_candidates(trainer)
@@ -507,7 +506,6 @@ class ModelCheckpoint(Callback):
         trainer,
         pl_module,
     ):
-
         k = epoch + 1 if self.save_top_k == -1 else self.save_top_k
 
         del_list = []
@@ -531,9 +529,8 @@ class ModelCheckpoint(Callback):
 
         if self.verbose:
             rank_zero_info(
-                f"Epoch {epoch:d}: {self.monitor} reached"
-                f" {current:0.5f} (best {self.best_model_score:0.5f}),"
-                f" saving model to {filepath} as top {k}"
+                f"Epoch {epoch:d}: {self.monitor} reached {current:0.5f} (best {self.best_model_score:0.5f}),"
+                f' saving model to "{filepath}" as top {k}'
             )
         self._save_model(filepath, trainer, pl_module)
 
