@@ -505,7 +505,7 @@ def test_trainer_max_steps_and_epochs(tmpdir):
     assert result == 1, "Training did not complete"
 
     # check training stopped at max_epochs
-    assert trainer.global_step == num_train_samples * trainer.max_epochs
+    assert trainer.global_step == num_train_samples * trainer.max_epochs - 1
     assert trainer.current_epoch == trainer.max_epochs - 1, "Model did not stop at max_epochs"
 
 
