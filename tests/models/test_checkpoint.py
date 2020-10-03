@@ -163,8 +163,8 @@ def test_model_checkpoint_format_checkpoint_name(tmpdir):
     ckpt_name = ModelCheckpoint(monitor='early_stop_on', filepath='').format_checkpoint_name(5, 4, {})
     assert ckpt_name == 'epoch=5-step=4.ckpt'
     # CWD
-    ckpt_name = ModelCheckpoint(monitor='early_stop_on', filepath='.').format_checkpoint_name(3, 4, {})
-    assert Path(ckpt_name) == Path('.') / 'epoch=3-step=4.ckpt'
+    ckpt_name = ModelCheckpoint(monitor='early_stop_on', filepath='../callbacks').format_checkpoint_name(3, 4, {})
+    assert Path(ckpt_name) == Path('../callbacks') / 'epoch=3-step=4.ckpt'
     # dir does not exist so it is used as filename
     filepath = tmpdir / 'dir'
     ckpt_name = ModelCheckpoint(monitor='early_stop_on', filepath=filepath, prefix='test').format_checkpoint_name(3, 4, {})
@@ -375,7 +375,7 @@ def test_default_checkpoint_behavior(tmpdir):
     assert len(trainer.dev_debugger.checkpoint_callback_history) == 3
 
     # make sure the checkpoint we saved has the metric in the name
-    ckpts = os.listdir(os.path.join(tmpdir, 'lightning_logs', 'version_0', 'checkpoints'))
+    ckpts = os.listdir(os.path.join(tmpdir, '../callbacks/lightning_logs', 'version_0', 'checkpoints'))
     assert len(ckpts) == 1
     assert ckpts[0] == 'epoch=2-step=14.ckpt'
 
@@ -468,3 +468,94 @@ def test_model_checkpoint_save_last_checkpoint_contents(tmpdir):
     )
     for w0, w1 in zip(model_last_epoch.parameters(), model_last.parameters()):
         assert w0.eq(w1).all()
+
+
+def test_model_checkpoint_only_weights(tmpdir):
+    """Tests use case where ModelCheckpoint is configured to save only model weights, and
+     user tries to load checkpoint to resume training.
+     """
+    model = EvalModelTemplate()
+
+    trainer = Trainer(
+        default_root_dir=tmpdir,
+        max_epochs=1,
+        checkpoint_callback=ModelCheckpoint(tmpdir, monitor='early_stop_on', save_weights_only=True),
+    )
+    # fit model
+    result = trainer.fit(model)
+    # training complete
+    assert result == 1, 'training failed to complete'
+
+    checkpoint_path = list(trainer.checkpoint_callback.best_k_models.keys())[0]
+
+    # assert saved checkpoint has no trainer data
+    checkpoint = torch.load(checkpoint_path)
+    assert 'optimizer_states' not in checkpoint, 'checkpoint should contain only model weights'
+    assert 'lr_schedulers' not in checkpoint, 'checkpoint should contain only model weights'
+
+    # assert loading model works when checkpoint has only weights
+    assert EvalModelTemplate.load_from_checkpoint(checkpoint_path=checkpoint_path)
+
+    # directly save model
+    new_weights_path = os.path.join(tmpdir, 'save_test.ckpt')
+    trainer.save_checkpoint(new_weights_path, weights_only=True)
+    # assert saved checkpoint has no trainer data
+    checkpoint = torch.load(new_weights_path)
+    assert 'optimizer_states' not in checkpoint, 'checkpoint should contain only model weights'
+    assert 'lr_schedulers' not in checkpoint, 'checkpoint should contain only model weights'
+
+    # assert restoring train state fails
+    with pytest.raises(KeyError, match='checkpoint contains only the model'):
+        trainer.checkpoint_connector.restore_training_state(checkpoint)
+
+
+@pytest.mark.parametrize(["save_top_k", "save_last", "file_prefix", "expected_files"], [
+    pytest.param(-1, False, '', {'epoch=4.ckpt', 'epoch=3.ckpt', 'epoch=2.ckpt', 'epoch=1.ckpt', 'epoch=0.ckpt'},
+                 id="CASE K=-1  (all)"),
+    pytest.param(1, False, 'test_prefix', {'test_prefix-epoch=4.ckpt'},
+                 id="CASE K=1 (2.5, epoch 4)"),
+    pytest.param(2, False, '', {'epoch=4.ckpt', 'epoch=2.ckpt'},
+                 id="CASE K=2 (2.5 epoch 4, 2.8 epoch 2)"),
+    pytest.param(4, False, '', {'epoch=1.ckpt', 'epoch=4.ckpt', 'epoch=3.ckpt', 'epoch=2.ckpt'},
+                 id="CASE K=4 (save all 4 base)"),
+    pytest.param(3, False, '', {'epoch=2.ckpt', 'epoch=3.ckpt', 'epoch=4.ckpt'},
+                 id="CASE K=3 (save the 2nd, 3rd, 4th model)"),
+    pytest.param(1, True, '', {'epoch=4.ckpt', 'last.ckpt'},
+                 id="CASE K=1 (save the 4th model and the last model)"),
+])
+def test_model_checkpoint_options(tmpdir, save_top_k, save_last, file_prefix, expected_files):
+    """Test ModelCheckpoint options."""
+
+    def mock_save_function(filepath, *args):
+        open(filepath, 'a').close()
+
+    # simulated losses
+    losses = [10, 9, 2.8, 5, 2.5]
+
+    checkpoint_callback = ModelCheckpoint(
+        tmpdir / '{epoch}',
+        monitor='checkpoint_on',
+        save_top_k=save_top_k,
+        save_last=save_last,
+        prefix=file_prefix,
+        verbose=1,
+    )
+    checkpoint_callback.save_function = mock_save_function
+    trainer = Trainer()
+
+    # emulate callback's calls during the training
+    for i, loss in enumerate(losses):
+        trainer.current_epoch = i
+        trainer.global_step = i
+        trainer.logger_connector.callback_metrics = {'checkpoint_on': torch.tensor(loss)}
+        checkpoint_callback.on_validation_end(trainer, trainer.get_model())
+
+    file_lists = set(os.listdir(tmpdir))
+
+    assert len(file_lists) == len(expected_files), (
+        f"Should save {len(expected_files)} models when save_top_k={save_top_k} but found={file_lists}"
+    )
+
+    # verify correct naming
+    for fname in expected_files:
+        assert fname in file_lists
