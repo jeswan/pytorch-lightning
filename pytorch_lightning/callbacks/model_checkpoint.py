@@ -138,6 +138,7 @@ class ModelCheckpoint(Callback):
         self.save_weights_only = save_weights_only
         self.period = period
         self.epoch_last_check = None
+        self.step_last_check = None
         self.prefix = prefix
         self.best_k_models = {}
         self.kth_best_model_path = ""
@@ -187,6 +188,7 @@ class ModelCheckpoint(Callback):
             or self.period < 1  # no models are saved
             or (trainer.current_epoch + 1) % self.period  # skip epoch
             or trainer.running_sanity_check  # don't save anything during sanity check
+            or trainer.global_step == self.step_last_check  # check only once per step
         ):
             return
 
@@ -195,6 +197,7 @@ class ModelCheckpoint(Callback):
 
         # track epoch when ckpt was last checked
         self.epoch_last_check = trainer.current_epoch
+        self.step_last_check = trainer.global_step
 
         # what can be monitored
         monitor_candidates = self._monitor_candidates(trainer)
