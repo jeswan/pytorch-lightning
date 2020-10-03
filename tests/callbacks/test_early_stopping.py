@@ -42,7 +42,7 @@ def test_resume_early_stopping_from_checkpoint(tmpdir):
     trainer = Trainer(
         default_root_dir=tmpdir,
         checkpoint_callback=checkpoint_callback,
-        early_stop_callback=early_stop_callback,
+        callbacks=[early_stop_callback],
         num_sanity_val_steps=0,
         max_epochs=4,
     )
@@ -62,7 +62,7 @@ def test_resume_early_stopping_from_checkpoint(tmpdir):
         default_root_dir=tmpdir,
         max_epochs=2,
         resume_from_checkpoint=checkpoint_filepath,
-        early_stop_callback=early_stop_callback,
+        callbacks=[early_stop_callback],
     )
 
     with pytest.raises(MisconfigurationException, match=r'.*you restored a checkpoint with current_epoch*'):
@@ -77,7 +77,7 @@ def test_early_stopping_no_extraneous_invocations(tmpdir):
     expected_count = 4
     trainer = Trainer(
         default_root_dir=tmpdir,
-        early_stop_callback=True,
+        callbacks=[EarlyStopping()],
         val_check_interval=1.0,
         max_epochs=expected_count,
     )
@@ -106,7 +106,7 @@ def test_early_stopping_patience(tmpdir, loss_values, patience, expected_stop_ep
     early_stop_callback = EarlyStopping(monitor="test_val_loss", patience=patience, verbose=True)
     trainer = Trainer(
         default_root_dir=tmpdir,
-        early_stop_callback=early_stop_callback,
+        callbacks=[early_stop_callback],
         val_check_interval=1.0,
         num_sanity_val_steps=0,
         max_epochs=10,
@@ -165,7 +165,7 @@ def test_early_stopping_functionality(tmpdir):
 
     trainer = Trainer(
         default_root_dir=tmpdir,
-        early_stop_callback=True,
+        callbacks=[EarlyStopping],
         overfit_batches=0.20,
         max_epochs=20,
     )
