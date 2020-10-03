@@ -188,6 +188,7 @@ class ModelCheckpoint(Callback):
             or self.period < 1  # no models are saved
             or (trainer.current_epoch + 1) % self.period  # skip epoch
             or trainer.running_sanity_check  # don't save anything during sanity check
+            or self.step_last_check == trainer.global_step  # check it only once per step
         ):
             return
 

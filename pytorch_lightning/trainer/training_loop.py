@@ -198,7 +198,7 @@ class TrainLoop:
         if is_last and any(c.save_last for c in checkpoint_callbacks):
             rank_zero_info('Saving latest checkpoint...')
         model = self.trainer.get_model()
-        [c.on_validation_end(self.trainer, model) for c in checkpoint_callbacks if not c.last_model_path]
+        [c.on_validation_end(self.trainer, model) for c in checkpoint_callbacks]
 
     def on_train_epoch_start(self, epoch):
         model = self.trainer.get_model()

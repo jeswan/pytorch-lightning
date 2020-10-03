@@ -510,6 +510,8 @@ class Trainer(
                                  f' ({self.min_epochs}) or minimum steps ({self.min_steps}) has'
                                  ' not been met. Training will continue...')
 
+            # lower the global step as we ended in the last one
+            self.global_step -= 1
             # hook
             self.train_loop.on_train_end()
 

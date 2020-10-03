@@ -434,7 +434,7 @@ def test_model_checkpoint_save_last_checkpoint_contents(tmpdir):
     model = EvalModelTemplate()
     num_epochs = 3
     model_checkpoint = ModelCheckpoint(
-        monitor='early_stop_on', filepath=tmpdir, save_top_k=num_epochs, save_last=True
+        monitor='early_stop_on', filepath=tmpdir / '{epoch}', save_top_k=num_epochs, save_last=True
     )
     trainer = Trainer(
         default_root_dir=tmpdir,
@@ -448,9 +448,10 @@ def test_model_checkpoint_save_last_checkpoint_contents(tmpdir):
     path_last_epoch = str(tmpdir / f"epoch={num_epochs - 1}.ckpt")
     path_last = str(tmpdir / "last.ckpt")
     assert path_last == model_checkpoint.last_model_path
-    assert os.path.isfile(path_last_epoch)
 
+    assert os.path.isfile(path_last_epoch)
     ckpt_last_epoch = torch.load(path_last_epoch)
+    assert os.path.isfile(path_last)
     ckpt_last = torch.load(path_last)
     assert all(ckpt_last_epoch[k] == ckpt_last[k] for k in ("epoch", "global_step"))
 
